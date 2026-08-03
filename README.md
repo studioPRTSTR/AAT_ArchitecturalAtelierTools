@@ -1,4 +1,4 @@
-SoftInsulation - Rhino 8 command
+Soft Thermal Insulation - Rhino 8 
 =================================
 Draws the classic "soft" / batt / flexible insulation symbol along a path
 you draw, driven by a SINGLE parameter: the width of the insulation band.

@@ -1,4 +1,3 @@
-"""
 SoftInsulation - Rhino 8 command
 =================================
 Draws the classic "soft" / batt / flexible insulation symbol along a path
@@ -52,4 +51,3 @@ Option B - Turn it into an installable plug-in (.rhi):
   4. Copy the body of run_soft_insulation() below into that command's
      RunCommand() method (keep the helper functions alongside it).
   5. Use "Create Installer" / Build to produce a .rhi you can install.
-"""

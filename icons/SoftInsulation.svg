@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+  <line x1="3" y1="10" x2="61" y2="10" stroke="#8a8a8a" stroke-width="2" stroke-dasharray="5 3"/>
+  <line x1="3" y1="54" x2="61" y2="54" stroke="#8a8a8a" stroke-width="2" stroke-dasharray="5 3"/>
+  <path d="M8.42,32 A11.79,11.79 0 1 1 20.21,32 A11.79,11.79 0 1 0 32,32 A11.79,11.79 0 1 1 43.79,32 A11.79,11.79 0 1 0 55.58,32 " fill="none" stroke="#2f6fdc" stroke-width="3.5" stroke-linejoin="round"/>
+</svg>

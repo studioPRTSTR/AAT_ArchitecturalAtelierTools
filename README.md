@@ -1,51 +1,64 @@
-# RSoTeSc – Soft Thermal Insulation for Rhino 8
+# <img src="icons/ArchitecturalAtelierTools.svg" width="40" align="center"> ArchitecturalAtelierTools
 
-Draws the soft / batt insulation symbol along a curve. Pick a path, type the band width, done.
+A Rhino 8 plugin with drawing tools for architectural details. Installs as one package; every tool is a Rhino command.
+
+| Icon | Command | What it does |
+|------|---------|--------------|
+| <img src="icons/SoftInsulation.svg" width="32"> | `SoftInsulation` | Draws the soft / batt insulation symbol along a curve. |
+
+## Install
+
+1. Rhino → Options → **Package Manager → Sources** → add the shared package folder.
+2. `_PackageManager` → search `ArchitecturalAtelierTools` → **Install** → restart Rhino.
+
+Updates appear in the Package Manager.
+
+## Repository layout
+
+```
+commands/   one .cs file per command (+ optional .json defaults)
+icons/      plugin icon + one icon per command (.svg and .png)
+docs/       drawings for this README
+build.ps1   builds the .yak package and publishes it to the feed
+ArchitecturalAtelierTools.rhproj   Rhino project: plugin name, version, icons, commands
+```
+
+---
+
+## SoftInsulation
 
 ![Loop construction](docs/principle-loops.svg)
 
-## Use
-
-1. Run the command `SoftInsulation` (or the script, see below).
+1. Run `SoftInsulation`.
 2. Pick a curve – or press **Enter** to draw a polyline.
 3. Type the band width **W** (tip to tip) and press **Enter**.
 
 The result goes on layer `A_Isolation_01`, joined and grouped. Each run clears that layer first.
 
-### Options
-
 | Option          | Values                                   | Effect                                                        |
 |-----------------|------------------------------------------|---------------------------------------------------------------|
 | `Spacing`       | number, `0` = auto                       | Distance **s** between loops. Auto = `W / (2 + √3)`.          |
-| `Corner`        | `Miter`, `ButtIncoming`, `ButtOutgoing`  | How two segments meet at a corner (see below).               |
+| `Corner`        | `Miter`, `ButtIncoming`, `ButtOutgoing`  | How two segments meet at a corner.                           |
 | `CrossingLoops` | `Trim`, `Remove`                         | Loops hitting a cut line are trimmed exactly or dropped.     |
 | `Rhythm`        | `Continuous`, `Restart`                  | Keep loop spacing across corners, or restart at each corner. |
 | `DebugDraw`     | `On`, `Off`                              | Draws cut lines on `A_Isolation_01_debug` and logs values.    |
 
-## Principle
+**Principle**
 
-- Loops alternate left / right of the path. Neighbouring loops meet in a **pinch point** on the path.
+- Loops alternate left / right of the path and meet in **pinch points** on the path.
 - Each loop is one arc: pinch point → tip on the band edge → next pinch point.
 - Center offset `k = (W² − s²) / 4W`, radius `R = W/2 − k`. Spacing must be smaller than W.
-- Every segment is clipped by two cut lines: a perpendicular cap at the path ends, and a corner cut at each vertex.
+- Each segment is clipped by two cut lines: a perpendicular cap at path ends, a corner cut at each vertex.
 
 ![Corner modes](docs/principle-corners.svg)
 
-- **Miter** – both segments are cut on the angle bisector.
-- **ButtIncoming** – the incoming segment runs through the corner; the outgoing one starts at its edge.
-- **ButtOutgoing** – the reverse.
+Corners sharper than 15° or straighter than 165° always use Miter. Supported paths: lines, polylines (open or closed), polycurves with arcs, single curves – in the XY plane.
 
-Corners sharper than 15° or straighter than 165° always use Miter.
+**Defaults** come from `SoftInsulation.json`. First file found wins:
 
-Supported paths: lines, polylines (open or closed), polycurves with arc segments, single curves. The path is expected in the XY plane.
-
-## Settings file
-
-`RSoTeSc_config.json` sets the defaults. First file found wins:
-
-1. `%APPDATA%\RSoTeSc\RSoTeSc_config.json`
+1. `%APPDATA%\ArchitecturalAtelierTools\SoftInsulation.json`
 2. next to the installed plugin
-3. next to the script
+3. next to the script (`commands/`)
 
 ```json
 {
@@ -58,23 +71,30 @@ Supported paths: lines, polylines (open or closed), polycurves with arc segments
 }
 ```
 
-All keys are optional. `corner_mode`: `miter`, `butt_incoming`, `butt_outgoing`.
+All keys optional. `corner_mode`: `miter`, `butt_incoming`, `butt_outgoing`.
 
-## Install
+---
 
-**As a package (recommended):** Rhino → Options → Package Manager → Sources → add the shared package folder. Then `_PackageManager` → search `RSoTeSc` → Install. Updates show up there too.
+## Development
 
-**As a script:** `_ScriptEditor` → open `RSoTeSc_RhinoSoftThermalInsulationScript.cs` → Run.
+### One-time project setup
 
-## Build & release
+In Rhino: `_ScriptEditor` → **File → Create Project** → save as `ArchitecturalAtelierTools.rhproj` in this folder. In the project settings set the plugin icon to `icons/ArchitecturalAtelierTools.svg`, then add each command (below).
 
-One-time: in `_ScriptEditor` → File → Create Project → save as `RSoTeSc.rhproj` in this folder → add the `.cs` as command `SoftInsulation`.
+### Add a new command
 
-Release (Rhino must be running):
+1. Create `commands/<CommandName>.cs` (copy `SoftInsulation.cs` as a template).
+2. Create `icons/<CommandName>.svg` (64×64 viewBox).
+3. In the project: **Add → Existing Script** → pick the `.cs` → name the command → set its icon.
+4. Add a row to the command table above and release.
+
+### Release
+
+Rhino must be running:
 
 ```powershell
-.\build.ps1 -Version 1.0.1 -Feed "\\SERVER\share\RhinoPackages"
-git tag v1.0.1
+.\build.ps1 -Version 1.1.0 -Feed "\\SERVER\share\RhinoPackages"
+git tag v1.1.0
 ```
 
-This builds `build\<version>\*.yak` and copies it to the feed. Each release needs a higher version number (`1.0.1` fix, `1.1.0` feature).
+Builds `build\<version>\*.yak` and copies it to the feed. Every release needs a higher version (`1.0.1` fix, `1.1.0` new command).

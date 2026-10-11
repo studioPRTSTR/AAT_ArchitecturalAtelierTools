@@ -43,7 +43,8 @@ struct CutLine
 
 static class SoftInsulation
 {
-    const string ConfigFilename = "RSoTeSc_config.json";
+    const string PluginName = "ArchitecturalAtelierTools";
+    const string ConfigFilename = "SoftInsulation.json";
 
     static string LayerName = "A_Isolation_01";
     static double DefaultWidth = 0.5;
@@ -63,7 +64,7 @@ static class SoftInsulation
     static IEnumerable<string> ConfigCandidates(string scriptPath)
     {
         yield return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RSoTeSc", ConfigFilename);
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), PluginName, ConfigFilename);
 
         string assemblyDir = null;
         try { assemblyDir = Path.GetDirectoryName(typeof(SoftInsulation).Assembly.Location); } catch (Exception) { }

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" font-family="Helvetica, Arial, sans-serif" font-size="14">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#333"/></marker></defs>
+<rect width="800" height="340" fill="#ffffff"/>
+<line x1='88.56' y1='90' x2='685.9' y2='90' stroke='#999' stroke-dasharray='2 4'/>
+<line x1='88.56' y1='250' x2='685.9' y2='250' stroke='#999' stroke-dasharray='2 4'/>
+<line x1='88.56' y1='170' x2='685.9' y2='170' stroke='#222' stroke-dasharray='10 4 2 4'/>
+<text x='20' y='175' fill='#222'>path</text>
+<text x='20' y='94' fill='#777' font-size='12'>band edge</text><text x='20' y='254' fill='#777' font-size='12'>band edge</text>
+<path d='M108.56,170 A42.87,42.87 0 1 1 151.44,170 A42.87,42.87 0 1 0 194.31,170 A42.87,42.87 0 1 1 237.18,170 A42.87,42.87 0 1 0 280.05,170 A42.87,42.87 0 1 1 322.92,170 A42.87,42.87 0 1 0 365.8,170 A42.87,42.87 0 1 1 408.67,170 A42.87,42.87 0 1 0 451.54,170 A42.87,42.87 0 1 1 494.41,170 A42.87,42.87 0 1 0 537.28,170 A42.87,42.87 0 1 1 580.15,170 A42.87,42.87 0 1 0 623.03,170 A42.87,42.87 0 1 1 665.9,170 ' fill='none' stroke='#2f6fdc' stroke-width='2'/>
+<circle cx='108.56' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='151.44' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='194.31' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='237.18' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='280.05' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='322.92' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='365.8' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='408.67' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='451.54' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='494.41' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='537.28' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='580.15' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='623.03' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='665.9' cy='170' r='3' fill='#fff' stroke='#222'/>
+<circle cx='387.23' cy='132.87' r='42.87' fill='none' stroke='#d9534f' stroke-width='1' stroke-dasharray='3 3'/>
+<circle cx='387.23' cy='132.87' r='3.5' fill='#d9534f'/>
+<line x1='387.23' y1='132.87' x2='422.35' y2='108.28' stroke='#d9534f' stroke-width='1.5'/>
+<text x='408.79' y='116.58' fill='#d9534f' font-weight='bold'>R</text>
+<line x1='330.36' y1='170' x2='330.36' y2='132.87' stroke='#333' marker-start='url(#ar)' marker-end='url(#ar)'/>
+<line x1='324.36' y1='132.87' x2='387.23' y2='132.87' stroke='#bbb' stroke-width='0.8'/>
+<text x='314.36' y='156.44' fill='#333' font-weight='bold'>k</text>
+<circle cx='387.23' cy='90' r='3.5' fill='#2f6fdc'/>
+<text x='393.23' y='84' fill='#2f6fdc' font-size='12'>tip</text>
+<line x1='387.23' y1='174' x2='387.23' y2='286' stroke='#bbb' stroke-width='0.8'/>
+<line x1='430.1' y1='254' x2='430.1' y2='286' stroke='#bbb' stroke-width='0.8'/>
+<line x1='387.23' y1='280' x2='430.1' y2='280' stroke='#333' marker-start='url(#ar)' marker-end='url(#ar)'/>
+<text x='404.67' y='300' fill='#333' font-weight='bold'>s</text>
+<line x1='695.9' y1='90' x2='695.9' y2='250' stroke='#333' marker-start='url(#ar)' marker-end='url(#ar)'/>
+<text x='703.9' y='175' fill='#333' font-weight='bold'>W</text>
+<text x='20' y='30' fill='#222' font-weight='bold' font-size='16'>Loop construction</text>
+<text x='20' y='305' fill='#444' font-size='13'>o = pinch point, where neighbouring loops meet on the path</text>
+<text x='20' y='326' fill='#444' font-size='13'>k = (W&#178; &#8722; s&#178;) / 4W&#160;&#160;&#160;&#160;&#160;&#160;R = W/2 &#8722; k&#160;&#160;&#160;&#160;&#160;&#160;default s = W / (2 + &#8730;3), which gives R = s</text>
+</svg>

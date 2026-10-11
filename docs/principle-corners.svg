@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" font-family="Helvetica, Arial, sans-serif" font-size="14">
+<rect width="760" height="320" fill="#ffffff"/>
+<text x='20' y='28' fill='#222' font-weight='bold' font-size='16'>Corner modes</text>
+<g transform='translate(20,40)'>
+<polygon points='20,120 100,120 160,180 20,180' fill='#cfe0fb' stroke='#2f6fdc' stroke-width='1.5'/>
+<polygon points='100,120 100,30 160,30 160,180' fill='#fde2c4' stroke='#e08a1e' stroke-width='1.5'/>
+<line x1='100' y1='120' x2='160' y2='180' stroke='#d9534f' stroke-width='3'/>
+<polyline points='20,150 130,150 130,30' fill='none' stroke='#222' stroke-dasharray='8 3 2 3'/>
+<circle cx='130' cy='150' r='3.5' fill='#222'/>
+<text x='112' y='170' fill='#222' font-size='12'>P</text>
+<text x='40' y='172' fill='#2f6fdc' font-weight='bold'>A</text>
+<text x='136' y='60' fill='#e08a1e' font-weight='bold'>B</text>
+<text x='20' y='212' fill='#222' font-weight='bold'>Miter</text>
+<text x='20' y='232' fill='#555' font-size='12'>cut on the bisector</text>
+</g>
+<g transform='translate(270,40)'>
+<polygon points='20,120 160,120 160,180 20,180' fill='#cfe0fb' stroke='#2f6fdc' stroke-width='1.5'/>
+<polygon points='100,120 100,30 160,30 160,120' fill='#fde2c4' stroke='#e08a1e' stroke-width='1.5'/>
+<line x1='100' y1='120' x2='160' y2='120' stroke='#d9534f' stroke-width='3'/>
+<polyline points='20,150 130,150 130,30' fill='none' stroke='#222' stroke-dasharray='8 3 2 3'/>
+<circle cx='130' cy='150' r='3.5' fill='#222'/>
+<text x='112' y='170' fill='#222' font-size='12'>P</text>
+<text x='40' y='172' fill='#2f6fdc' font-weight='bold'>A</text>
+<text x='136' y='60' fill='#e08a1e' font-weight='bold'>B</text>
+<text x='20' y='212' fill='#222' font-weight='bold'>ButtIncoming</text>
+<text x='20' y='232' fill='#555' font-size='12'>A runs through, B starts at A's edge</text>
+</g>
+<g transform='translate(520,40)'>
+<polygon points='20,120 100,120 100,180 20,180' fill='#cfe0fb' stroke='#2f6fdc' stroke-width='1.5'/>
+<polygon points='100,180 100,30 160,30 160,180' fill='#fde2c4' stroke='#e08a1e' stroke-width='1.5'/>
+<line x1='100' y1='120' x2='100' y2='180' stroke='#d9534f' stroke-width='3'/>
+<polyline points='20,150 130,150 130,30' fill='none' stroke='#222' stroke-dasharray='8 3 2 3'/>
+<circle cx='130' cy='150' r='3.5' fill='#222'/>
+<text x='112' y='170' fill='#222' font-size='12'>P</text>
+<text x='40' y='172' fill='#2f6fdc' font-weight='bold'>A</text>
+<text x='136' y='60' fill='#e08a1e' font-weight='bold'>B</text>
+<text x='20' y='212' fill='#222' font-weight='bold'>ButtOutgoing</text>
+<text x='20' y='232' fill='#555' font-size='12'>B runs through, A stops at B's edge</text>
+</g>
+<text x='20' y='308' fill='#444' font-size='13'>A = incoming segment, B = outgoing segment, red = cut line. Loops are clipped exactly on the cut line.</text>
+</svg>

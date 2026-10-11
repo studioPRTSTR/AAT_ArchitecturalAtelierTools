@@ -629,7 +629,6 @@ static class SoftInsulation
         LoadConfig();
 
         string debugLayerName = LayerName + "_debug";
-        ClearLayer(doc, LayerName);
         ClearLayer(doc, debugLayerName);
 
         Curve path = GetPathCurve();

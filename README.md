@@ -33,7 +33,7 @@ ArchitecturalAtelierTools.rhproj   Rhino project: plugin name, version, icons, c
 2. Pick a curve – or press **Enter** to draw a polyline.
 3. Type the band width **W** (tip to tip) and press **Enter**.
 
-The result goes on layer `A_Isolation_01`, joined and grouped. Each run clears that layer first.
+The result goes on layer `A_Isolation_01`, joined and grouped. Each run adds a new group; existing insulation is kept.
 
 | Option          | Values                                   | Effect                                                        |
 |-----------------|------------------------------------------|---------------------------------------------------------------|

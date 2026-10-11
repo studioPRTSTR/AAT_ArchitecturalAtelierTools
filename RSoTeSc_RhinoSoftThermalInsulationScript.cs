@@ -22,21 +22,24 @@ SoftInsulation.Run(RhinoDoc.ActiveDoc);
 
 
 /// <summary>
-/// A cut line for _ClipToLine: the infinite line through Point,
-/// perpendicular to Tangent, keeping the side with positive (or negative)
-/// signed progress along Tangent.
+/// An infinite cutting line through Origin with direction Dir (unit, world
+/// XY). A point X is kept when SideOfLine(X) == KeepSign. HalfLength is the
+/// distance from Origin, along Dir, to where the line meets the band edge
+/// (halfWidth / sin(theta/2) at a corner, halfWidth at a perpendicular cap).
 /// </summary>
-struct Cut
+struct CutLine
 {
-    public Point3d Point;
-    public Vector3d Tangent;
-    public bool KeepPositive;
+    public Point3d Origin;
+    public Vector3d Dir;
+    public int KeepSign;
+    public double HalfLength;
 
-    public Cut(Point3d point, Vector3d tangent, bool keepPositive)
+    public CutLine(Point3d origin, Vector3d dir, int keepSign, double halfLength)
     {
-        Point = point;
-        Tangent = tangent;
-        KeepPositive = keepPositive;
+        Origin = origin;
+        Dir = dir;
+        KeepSign = keepSign;
+        HalfLength = halfLength;
     }
 }
 
@@ -47,15 +50,26 @@ static class SoftInsulation
 
     static string LayerName = "A_Isolation_01";
     static double DefaultWidth = 0.5;
+    static double DefaultSpacing = 0.0;      // 0 = auto (classic look: width / (2 + sqrt 3))
+    static bool TrimCrossing = true;         // false = drop loops that cross a cut line
+    static bool ContinuousRhythm = true;     // false = restart the spacing on every segment
 
     static readonly double Sqrt3 = Math.Sqrt(3.0);
 
+    // Below this interior angle a corner counts as "very sharp": the miter
+    // tip runs off towards infinity, so its reach is capped (see CutReach).
+    const double SharpAngleDeg = 15.0;
+    // Cap on how far (in band widths) a miter may reach along a segment.
+    const double MaxMiterReachFactor = 4.0;
+
 
     /// <summary>
-    /// Read layer_name/default_width from RSoTeSc_config.json next to this
-    /// script, so they can be tweaked without editing the script itself -
-    /// handy while testing in Rhino's script editor. Falls back to the
-    /// built-in defaults if the file is missing or malformed.
+    /// Read settings from RSoTeSc_config.json next to this script, so they
+    /// can be tweaked without editing the script itself - handy while
+    /// testing in Rhino's script editor. Falls back to the built-in defaults
+    /// if the file (or any key) is missing or malformed. Recognized keys:
+    /// layer_name, default_width, default_spacing, trim_crossing,
+    /// continuous_rhythm.
     /// </summary>
     static void LoadConfig([CallerFilePath] string scriptPath = "")
     {
@@ -68,7 +82,7 @@ static class SoftInsulation
             if (!File.Exists(configPath))
                 return;
 
-            // Tiny hand-rolled reader for the two flat keys we care about,
+            // Tiny hand-rolled reader for the few flat keys we care about,
             // so the script needs no JSON library reference.
             string json = File.ReadAllText(configPath);
 
@@ -76,25 +90,40 @@ static class SoftInsulation
             if (nameMatch.Success)
                 LayerName = Regex.Unescape(nameMatch.Groups[1].Value);
 
-            var widthMatch = Regex.Match(json, "\"default_width\"\\s*:\\s*([-+0-9.eE]+)");
-            if (widthMatch.Success &&
-                double.TryParse(widthMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double w))
-                DefaultWidth = w;
+            DefaultWidth = ReadNumber(json, "default_width", DefaultWidth);
+            DefaultSpacing = ReadNumber(json, "default_spacing", DefaultSpacing);
+            TrimCrossing = ReadBool(json, "trim_crossing", TrimCrossing);
+            ContinuousRhythm = ReadBool(json, "continuous_rhythm", ContinuousRhythm);
         }
         catch (Exception)
         {
         }
     }
 
+    static double ReadNumber(string json, string key, double fallback)
+    {
+        var m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*([-+0-9.eE]+)");
+        if (m.Success &&
+            double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
+            return v;
+        return fallback;
+    }
+
+    static bool ReadBool(string json, string key, bool fallback)
+    {
+        var m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*(true|false)");
+        return m.Success ? m.Groups[1].Value == "true" : fallback;
+    }
+
 
     /// <summary>
-    /// Delete any objects already on the Insulation-Soft layer before
-    /// drawing new ones, so leftover geometry from earlier test runs can
-    /// never get mixed in with (or mistaken for) the current run's output.
+    /// Delete any objects already on the given layer before drawing new
+    /// ones, so leftover geometry from earlier test runs can never get mixed
+    /// in with (or mistaken for) the current run's output.
     /// </summary>
-    static void ClearPreviousOutput(RhinoDoc doc)
+    static void ClearLayer(RhinoDoc doc, string layerName)
     {
-        int layerIndex = doc.Layers.FindByFullPath(LayerName, -1);
+        int layerIndex = doc.Layers.FindByFullPath(layerName, -1);
         if (layerIndex < 0)
             return;
         var existing = doc.Objects
@@ -106,16 +135,16 @@ static class SoftInsulation
     }
 
 
-    /// <summary>Create (or reuse) a dedicated layer for the insulation symbol.</summary>
-    static int EnsureLayer(RhinoDoc doc)
+    /// <summary>Create (or reuse) a dedicated layer.</summary>
+    static int EnsureLayer(RhinoDoc doc, string layerName, System.Drawing.Color color)
     {
-        int layerIndex = doc.Layers.FindByFullPath(LayerName, -1);
+        int layerIndex = doc.Layers.FindByFullPath(layerName, -1);
         if (layerIndex >= 0)
             return layerIndex;
         var layer = new Layer
         {
-            Name = LayerName,
-            Color = System.Drawing.Color.FromArgb(255, 120, 170, 255),
+            Name = layerName,
+            Color = color,
             PlotWeight = 0.13, // thin hairline, mm
         };
         return doc.Layers.Add(layer);
@@ -125,12 +154,12 @@ static class SoftInsulation
     /// <summary>
     /// Let the user either pick an existing curve to use as the insulation
     /// path, or - if they press Enter without selecting anything - draw a
-    /// new line interactively to define the direction.
+    /// new polyline interactively.
     /// </summary>
     static Curve GetPathCurve()
     {
         var go = new GetObject();
-        go.SetCommandPrompt("Select a path curve for the insulation run (Enter to draw a new line instead)");
+        go.SetCommandPrompt("Select a path curve for the insulation run (Enter to draw a new polyline instead)");
         go.GeometryFilter = ObjectType.Curve;
         go.AcceptNothing(true);
         GetResult result = go.Get();
@@ -140,50 +169,73 @@ static class SoftInsulation
 
         if (result == GetResult.Nothing)
         {
-            if (RhinoGet.GetLine(out Line line) != Result.Success)
+            if (RhinoGet.GetPolyline(out Polyline polyline) != Result.Success || polyline == null || polyline.Count < 2)
                 return null;
-            return line.ToNurbsCurve();
+            return polyline.ToPolylineCurve();
         }
 
         return null;
     }
 
 
-    static double? GetWidth()
+    /// <summary>
+    /// Ask for the band width, with command-line options for the spacing,
+    /// what to do with loops crossing a cut line, the rhythm across corners
+    /// and debug drawing. Returns false if cancelled.
+    /// </summary>
+    static bool GetSettings(out double width, out double spacing, out bool trimCrossing,
+                            out bool continuousRhythm, out bool debugDraw)
     {
+        width = DefaultWidth;
+        spacing = DefaultSpacing;
+        trimCrossing = TrimCrossing;
+        continuousRhythm = ContinuousRhythm;
+        debugDraw = false;
+
+        var optSpacing = new OptionDouble(DefaultSpacing, 0.0, 1.0e9);
+        var optCrossing = new OptionToggle(TrimCrossing, "Remove", "Trim");
+        var optRhythm = new OptionToggle(ContinuousRhythm, "Restart", "Continuous");
+        var optDebug = new OptionToggle(false, "Off", "On");
+
         var gn = new GetNumber();
         gn.SetCommandPrompt("Width of the insulation band (tip to tip)");
         gn.SetDefaultNumber(DefaultWidth);
         gn.SetLowerLimit(0.001, false);
-        gn.Get();
-        if (gn.CommandResult() != Result.Success)
-            return null;
-        return gn.Number();
+        gn.AcceptNothing(true);
+        gn.AddOptionDouble("Spacing", ref optSpacing, "Loop spacing (0 = auto)");
+        gn.AddOptionToggle("CrossingLoops", ref optCrossing);
+        gn.AddOptionToggle("Rhythm", ref optRhythm);
+        gn.AddOptionToggle("DebugDraw", ref optDebug);
+
+        while (true)
+        {
+            GetResult res = gn.Get();
+            if (res == GetResult.Option)
+                continue;
+            if (res == GetResult.Number)
+            {
+                width = gn.Number();
+                break;
+            }
+            if (res == GetResult.Nothing)
+                break; // keep DefaultWidth
+            return false;
+        }
+
+        spacing = optSpacing.CurrentValue;
+        trimCrossing = optCrossing.CurrentValue;
+        continuousRhythm = optRhythm.CurrentValue;
+        debugDraw = optDebug.CurrentValue;
+        return true;
     }
 
 
-    /// <summary>Point and unit tangent at the path's actual endpoint.</summary>
-    static void EndFrame(Curve path, out Point3d endPt, out Vector3d endTangent)
-    {
-        double tEnd = path.Domain.Max;
-        endPt = path.PointAt(tEnd);
-        endTangent = path.TangentAt(tEnd);
-        endTangent.Unitize();
-    }
+    // ------------------------------------------------------------------
+    // Small vector helpers
+    // ------------------------------------------------------------------
 
-
-    /// <summary>Point and unit tangent at the path's actual start.</summary>
-    static void StartFrame(Curve path, out Point3d startPt, out Vector3d startTangent)
-    {
-        double tStart = path.Domain.Min;
-        startPt = path.PointAt(tStart);
-        startTangent = path.TangentAt(tStart);
-        startTangent.Unitize();
-    }
-
-
-    /// <summary>World-XY unit vector perpendicular to a (unit) path tangent.</summary>
-    static Vector3d Perp(Vector3d tangent)
+    /// <summary>World-XY unit vector perpendicular to a (unit) tangent.</summary>
+    static Vector3d PerpXY(Vector3d tangent)
     {
         Vector3d perp = Vector3d.CrossProduct(tangent, Vector3d.ZAxis);
         if (perp.IsTiny())
@@ -194,74 +246,151 @@ static class SoftInsulation
 
 
     /// <summary>
-    /// Point and unit perpendicular (world XY) at arc-length distance s from
-    /// the start of the path. If s runs past the path's actual length, the
-    /// frame is linearly extrapolated from the end point/tangent so loop
-    /// generation can safely overshoot the path.
+    /// Which side of the infinite line through p with direction m the point
+    /// x lies on: sign of the Z component of cross(m, x - p). +1 = left of
+    /// m, -1 = right of m, 0 = (numerically) on the line.
     /// </summary>
-    static void FrameAtLength(Curve path, double s, double length, Point3d endPt, Vector3d endTangent,
-                              out Point3d pt, out Vector3d perp)
+    static int SideOfLine(Point3d x, Point3d p, Vector3d m)
     {
-        Vector3d tangent;
-        if (s <= length)
-        {
-            if (!path.LengthParameter(s, out double t))
-                t = path.Domain.Max;
-            pt = path.PointAt(t);
-            tangent = path.TangentAt(t);
-            tangent.Unitize();
-        }
-        else
-        {
-            pt = endPt + endTangent * (s - length);
-            tangent = endTangent;
-        }
+        double c = Vector3d.CrossProduct(m, x - p).Z;
+        if (c > 1e-12) return 1;
+        if (c < -1e-12) return -1;
+        return 0;
+    }
 
-        perp = Perp(tangent);
+
+    // ------------------------------------------------------------------
+    // Cut lines
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Bisector of a corner. a = -tanIn points from the vertex back along
+    /// the incoming segment, b = tanOut forward along the outgoing one; the
+    /// cut line runs along m = (a + b).Normalize(), which splits the
+    /// interior angle theta (between a and b) in half - like the miter of a
+    /// picture frame. If a + b is (nearly) zero the segments are collinear,
+    /// and the cut falls back to the perpendicular of the segment direction.
+    /// </summary>
+    static Vector3d GetBisector(Vector3d tanIn, Vector3d tanOut, out double theta)
+    {
+        Vector3d a = -tanIn;
+        Vector3d b = tanOut;
+        theta = Vector3d.VectorAngle(a, b); // interior angle, 0..pi
+
+        Vector3d m = a + b;
+        if (m.Length < 1e-9)
+            return PerpXY(tanIn);
+        m.Unitize();
+        return m;
     }
 
 
     /// <summary>
-    /// How far pt sits past the path's endpoint, measured along the
-    /// end tangent direction. Positive = beyond the path's end.
+    /// The shared miter cut at a vertex p1 between an incoming segment A
+    /// (tangent tanIn at p1) and an outgoing segment B (tangent tanOut).
+    /// Both segments use the same line; A keeps the side its own backward
+    /// ray a lies on, B keeps the side of its forward ray b - these are
+    /// always opposite, since m lies between them. This works the same for
+    /// left and right turns, because the side is measured, not assumed.
     /// </summary>
-    static double SignedProgress(Point3d pt, Point3d endPt, Vector3d endTangent)
+    static void CornerCuts(Point3d p1, Vector3d tanIn, Vector3d tanOut, double halfWidth,
+                           out CutLine endOfA, out CutLine startOfB, List<Line> debugLines)
     {
-        return (pt - endPt) * endTangent;
+        Vector3d m = GetBisector(tanIn, tanOut, out double theta);
+
+        // Cut-line length from the vertex to the band edge: halfWidth / sin(theta/2).
+        double sinHalf = Math.Sin(0.5 * theta);
+        double halfLength = sinHalf > 1e-9 ? halfWidth / sinHalf : double.PositiveInfinity;
+
+        int keepA = SideOfLine(p1 - tanIn, p1, m);
+        int keepB = SideOfLine(p1 + tanOut, p1, m);
+
+        endOfA = new CutLine(p1, m, keepA, halfLength);
+        startOfB = new CutLine(p1, m, keepB, halfLength);
+
+        double thetaDeg = RhinoMath.ToDegrees(theta);
+        if (thetaDeg < SharpAngleDeg)
+            RhinoApp.WriteLine("SoftInsulation: very sharp corner ({0:0.#} deg) at {1} - miter tip is capped.", thetaDeg, p1);
+
+        if (debugLines != null)
+        {
+            // Check: the cut line must meet BOTH band edges at the same
+            // point, i.e. the edge point sits exactly halfWidth from either
+            // segment's centerline. Both errors should be ~0.
+            double shown = Math.Min(halfLength, MaxMiterReachFactor * 2.0 * halfWidth);
+            Point3d edge = p1 + m * shown;
+            double errA = Math.Abs(Vector3d.CrossProduct(tanIn, edge - p1).Z) - halfWidth;
+            double errB = Math.Abs(Vector3d.CrossProduct(tanOut, edge - p1).Z) - halfWidth;
+            RhinoApp.WriteLine(string.Format(
+                "  corner {0}: theta={1:0.###} deg, m={2}, keepA={3}, keepB={4}, cutHalfLength={5:0.####}, edgeErrA={6:E2}, edgeErrB={7:E2}",
+                p1, thetaDeg, m, keepA, keepB, halfLength, errA, errB));
+            debugLines.Add(new Line(p1 - m * shown, p1 + m * shown));
+        }
     }
 
 
     /// <summary>
-    /// Curve parameters (sorted) where crv - a circular arc of the given
-    /// center/radius, lying in the world-XY plane - crosses the infinite
-    /// line through cutPt perpendicular to cutTangent.
+    /// Perpendicular cap at an open path end (first / last vertex): the cut
+    /// runs across the band at right angles, keeping the side the segment
+    /// itself lies on.
+    /// </summary>
+    static CutLine EndCap(Point3d p, Vector3d tangent, bool isStart, double halfWidth, List<Line> debugLines)
+    {
+        Vector3d m = PerpXY(tangent);
+        Point3d inside = isStart ? p + tangent : p - tangent;
+        if (debugLines != null)
+            debugLines.Add(new Line(p - m * halfWidth, p + m * halfWidth));
+        return new CutLine(p, m, SideOfLine(inside, p, m), halfWidth);
+    }
+
+
+    /// <summary>
+    /// How far a cut line reaches along the segment direction within the
+    /// band: 0 for a perpendicular cap, halfWidth * cot(theta/2) for a
+    /// miter. Capped for very sharp corners so the loop generation stays
+    /// finite (the extreme miter tip then just stays empty).
+    /// </summary>
+    static double CutReach(CutLine cut, Vector3d tangent, double width, out bool capped)
+    {
+        double reach = cut.HalfLength * Math.Abs(cut.Dir * tangent);
+        double max = MaxMiterReachFactor * width;
+        capped = double.IsInfinity(reach) || reach > max;
+        return capped ? max : reach;
+    }
+
+
+    // ------------------------------------------------------------------
+    // Arc / line clipping
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Angle parameters (sorted) where the arc crosses the cut line.
     ///
-    /// A loop's arc sweeps close to 300 degrees around its own circle, which
-    /// means it actually bulges up to half a loop-width past its own nominal
-    /// start and end points before settling there (needed so neighboring
-    /// loops interlock cleanly) - so an arc whose two endpoints both sit
-    /// safely on the same side of a cutoff line can still swing out past it
-    /// and back in between. The only reliable check is the arc's own circle
-    /// geometry: intersecting a circle with a line is a closed-form
-    /// quadratic (no sampling needed), and Curve.ClosestPoint recovers
-    /// whichever of the (up to two) solutions genuinely lands on this arc.
+    /// A loop's arc sweeps well over 180 degrees around its own circle, so
+    /// it bulges past its own start and end points - an arc whose two
+    /// endpoints both sit on the same side of a cut line can still swing
+    /// out past it and back in between. So the test uses the arc's own
+    /// circle: intersecting a circle with a line is closed-form (foot of the
+    /// center on the line, +/- the half chord), and ClosestParameter tells
+    /// which of the (up to two) solutions genuinely lands on this arc.
     /// </summary>
-    static List<double> LineCrossings(Curve crv, Point3d center, double radius, Point3d cutPt, Vector3d cutTangent)
+    static List<double> ArcLineCrossings(Arc arc, CutLine cut)
     {
         var parameters = new List<double>();
 
-        double offset = SignedProgress(center, cutPt, cutTangent);
-        double halfChordSq = radius * radius - offset * offset;
-        if (halfChordSq < 0.0)
+        Point3d c = arc.Center;
+        double r = arc.Radius;
+        Point3d foot = cut.Origin + cut.Dir * ((c - cut.Origin) * cut.Dir);
+        double dist = c.DistanceTo(foot);
+        if (dist > r)
             return parameters;
 
-        double halfChord = Math.Sqrt(halfChordSq);
-        Vector3d perpDir = Perp(cutTangent);
-        Point3d basePt = center - cutTangent * offset;
-
-        foreach (Point3d candidate in new[] { basePt + perpDir * halfChord, basePt - perpDir * halfChord })
+        double halfChord = Math.Sqrt(Math.Max(0.0, r * r - dist * dist));
+        double tol = 1e-6 * Math.Max(1.0, r);
+        foreach (Point3d candidate in new[] { foot + cut.Dir * halfChord, foot - cut.Dir * halfChord })
         {
-            if (crv.ClosestPoint(candidate, out double t) && crv.PointAt(t).DistanceTo(candidate) < 1e-6)
+            double t = arc.ClosestParameter(candidate);
+            if (arc.PointAt(t).DistanceTo(candidate) < tol)
                 parameters.Add(t);
         }
         parameters.Sort();
@@ -270,163 +399,156 @@ static class SoftInsulation
 
 
     /// <summary>
-    /// Cut crv (a circular arc of the given center/radius) against the
-    /// infinite line of cut, keeping only the sub-arc(s) where signed
-    /// progress along cut.Tangent is &gt; 0 if cut.KeepPositive, else &lt; 0.
-    /// Returns a list of kept pieces (may be empty, exactly one, or more
-    /// than one if the arc crosses the line more than once).
+    /// Clip a list of pattern arcs against one cut line:
+    /// - arcs entirely on the kept side stay untouched,
+    /// - arcs entirely on the other side are discarded,
+    /// - arcs that cross the line are either trimmed to the sub-arc(s) on
+    ///   the kept side (ending exactly on the line) or, with
+    ///   trimCrossing = false, removed completely.
     /// </summary>
-    static List<Curve> ClipToLine(Curve crv, Point3d center, double radius, Cut cut)
+    static List<Arc> ClipSegmentPattern(List<Arc> arcs, CutLine cut, bool trimCrossing)
     {
-        Interval dom = crv.Domain;
-        var bounds = new List<double> { dom.Min };
-        bounds.AddRange(LineCrossings(crv, center, radius, cut.Point, cut.Tangent));
-        bounds.Add(dom.Max);
-
-        var kept = new List<Curve>();
-        for (int i = 0; i < bounds.Count - 1; i++)
+        var kept = new List<Arc>();
+        foreach (Arc arc in arcs)
         {
-            double t0 = bounds[i], t1 = bounds[i + 1];
-            if (t1 - t0 < 1e-9)
-                continue;
-            Point3d midPt = crv.PointAt(0.5 * (t0 + t1));
-            if ((SignedProgress(midPt, cut.Point, cut.Tangent) > 0.0) == cut.KeepPositive)
+            Interval dom = arc.AngleDomain;
+            List<double> crossings = ArcLineCrossings(arc, cut)
+                .Where(t => t - dom.Min > 1e-9 && dom.Max - t > 1e-9)
+                .ToList();
+
+            if (crossings.Count == 0)
             {
-                Curve piece = crv.Trim(t0, t1);
-                if (piece != null)
-                    kept.Add(piece);
+                if (SideOfLine(arc.MidPoint, cut.Origin, cut.Dir) == cut.KeepSign)
+                    kept.Add(arc);
+                continue;
+            }
+
+            if (!trimCrossing)
+                continue;
+
+            var bounds = new List<double> { dom.Min };
+            bounds.AddRange(crossings);
+            bounds.Add(dom.Max);
+
+            for (int i = 0; i < bounds.Count - 1; i++)
+            {
+                double t0 = bounds[i], t1 = bounds[i + 1];
+                if (t1 - t0 < 1e-9)
+                    continue;
+                Point3d mid = arc.PointAt(0.5 * (t0 + t1));
+                if (SideOfLine(mid, cut.Origin, cut.Dir) == cut.KeepSign)
+                    kept.Add(new Arc(new Circle(arc.Plane, arc.Radius), new Interval(t0, t1)));
             }
         }
         return kept;
     }
 
 
+    // ------------------------------------------------------------------
+    // Pattern generation
+    // ------------------------------------------------------------------
+
     /// <summary>
-    /// The miter cutting line for a corner: direction bisecting the angle
-    /// between the incoming segment's backward ray (-tanIn) and the
-    /// outgoing segment's forward ray (tanOut) - the standard line-join
-    /// miter direction, same idea as a mitered corner on a picture frame.
-    ///
-    /// cutTangent is the normal to that line (for reuse with ClipToLine/
-    /// SignedProgress), and incomingPositive says which sign of progress
-    /// along it corresponds to the incoming segment's side, found by testing
-    /// a point just before the corner. Returns false if the two directions
-    /// are (near) identical, i.e. not really a corner.
+    /// Point and unit perpendicular (world XY) at arc-length distance s from
+    /// the segment's start. Outside [0, length] the frame is extrapolated
+    /// straight along the start/end tangent, so loops can be generated past
+    /// both ends (needed on the outer side of a miter) and trimmed back.
     /// </summary>
-    static bool CornerCut(Point3d cornerPt, Vector3d tanIn, Vector3d tanOut,
-                          out Vector3d cutTangent, out bool incomingPositive)
+    static void FrameAt(Curve seg, double s, double length, out Point3d pt, out Vector3d perp)
     {
-        cutTangent = Vector3d.Unset;
-        incomingPositive = false;
-
-        Vector3d bisector = tanOut - tanIn;
-        if (bisector.IsTiny())
-            return false;
-        bisector.Unitize();
-        cutTangent = Perp(bisector);
-
-        Point3d probePt = cornerPt - tanIn;
-        incomingPositive = SignedProgress(probePt, cornerPt, cutTangent) > 0.0;
-        return true;
+        Vector3d tangent;
+        if (s < 0.0)
+        {
+            tangent = seg.TangentAtStart;
+            pt = seg.PointAtStart + tangent * s;
+        }
+        else if (s > length)
+        {
+            tangent = seg.TangentAtEnd;
+            pt = seg.PointAtEnd + tangent * (s - length);
+        }
+        else
+        {
+            if (!seg.LengthParameter(s, out double t))
+                t = seg.Domain.Max;
+            pt = seg.PointAt(t);
+            tangent = seg.TangentAt(t);
+        }
+        perp = PerpXY(tangent);
     }
 
 
     /// <summary>
-    /// Build the FULL insulation symbol along a single (straight) segment,
-    /// from startCut to endCut - each a line to clip the segment's own
-    /// first/last loop against, exactly what ClipToLine expects. Passing the
-    /// path's own true start/end frame (perpendicular cutoff) reproduces the
-    /// ordinary end cap; passing a corner's miter line instead makes this
-    /// segment's end stop exactly at the angle bisector shared with its
-    /// neighbor.
+    /// Build the insulation loops of ONE segment, between its start cut and
+    /// end cut.
     ///
-    /// Every loop is first built as a clean, complete circle-arc: the arc
-    /// between two consecutive "pinch points" (where neighboring loops meet,
-    /// sitting exactly on this segment's centerline), bulging out through
-    /// its own outer tip. A virtual center placed one loop-width before the
-    /// segment's start supplies the pinch point that opens the very first
-    /// loop, so every loop - including the first and last - is built
-    /// identically. Only THEN, whichever loop actually reaches startCut or
-    /// endCut gets cut back: its own circle (known center and radius r) is
-    /// intersected exactly with the cutting line (see ClipToLine), and
-    /// trimmed to the crossing point(s). Loops entirely outside the segment
-    /// are dropped; every fully-interior loop is left untouched.
+    /// Loop j sits at arc length j * spacing, measured from `phase` before
+    /// the segment's start (phase = length of all previous segments for a
+    /// continuous rhythm, 0 to restart at the cut line); even j bulge to one
+    /// side, odd j to the other. Each loop is a single arc from the pinch
+    /// point before it (midpoint of its center and the previous loop's), out
+    /// through its tip on the band edge, to the pinch point after it.
+    ///
+    /// Loops are generated from well before the start to well past the end
+    /// (by each cut's reach along the segment, plus a margin), and then
+    /// EVERY loop is clipped against BOTH cut lines - so it never matters
+    /// how far a miter line slants into the band.
     /// </summary>
-    static List<Curve> BuildSegmentLoops(Curve path, double width, Cut startCut, Cut endCut)
+    static List<Arc> BuildSegmentLoops(Curve seg, double width, double spacing, double phase,
+                                       CutLine startCut, CutLine endCut, bool trimCrossing)
     {
-        var arcs = new List<Curve>();
+        var arcs = new List<Arc>();
 
-        double length = path.GetLength();
-        if (length <= 0)
+        double length = seg.GetLength();
+        if (length <= RhinoMath.ZeroTolerance)
             return arcs;
 
-        double r = width / (2.0 + Sqrt3);
-        double d = r * Sqrt3 / 2.0;
-        double a = r;
+        double halfWidth = 0.5 * width;
+        // Center offset k from the centerline: the circle through both pinch
+        // points (+/- spacing/2 on the centerline) and the tip (halfWidth
+        // out) has its center at k = (w^2 - s^2) / (4w). Its radius is
+        // halfWidth - k.
+        double k = (width * width - spacing * spacing) / (4.0 * width);
 
-        EndFrame(path, out Point3d endPt, out Vector3d endTangent);
-        StartFrame(path, out Point3d startPt, out Vector3d startTangent);
+        double reachStart = CutReach(startCut, seg.TangentAtStart, width, out _);
+        double reachEnd = CutReach(endCut, seg.TangentAtEnd, width, out _);
+        double margin = 2.0 * spacing + halfWidth;
+        double sMin = -reachStart - margin;
+        double sMax = length + reachEnd + margin;
 
-        // Overshoot generously past the segment's end so there's always at
-        // least one full loop past it to trim back from.
-        int nGuess = Math.Max((int)Math.Ceiling(length / a) + 5, 3);
+        if (length < reachStart + reachEnd)
+            RhinoApp.WriteLine(
+                "SoftInsulation: segment at {0} is shorter than its two miters reach ({1:0.###} < {2:0.###}) - the corner may look approximate.",
+                seg.PointAtStart, length, reachStart + reachEnd);
 
-        var centers = new List<Point3d>();
-        var perps = new List<Vector3d>();
-        var sides = new List<double>();
-        for (int i = 0; i <= nGuess; i++)
+        int jMin = (int)Math.Floor((phase + sMin) / spacing);
+        int jMax = (int)Math.Ceiling((phase + sMax) / spacing);
+
+        // One extra loop position on each side, for the outer pinch points.
+        int count = jMax - jMin + 3;
+        var centers = new Point3d[count];
+        var tips = new Point3d[count];
+        for (int idx = 0; idx < count; idx++)
         {
-            double s = i * a;
-            FrameAtLength(path, s, length, endPt, endTangent, out Point3d pt, out Vector3d perp);
-            double side = i % 2 == 0 ? 1.0 : -1.0;
-            centers.Add(pt + perp * (side * d));
-            perps.Add(perp);
-            sides.Add(side);
+            int j = jMin - 1 + idx;
+            FrameAt(seg, j * spacing - phase, length, out Point3d pt, out Vector3d perp);
+            double side = (j & 1) == 0 ? 1.0 : -1.0;
+            centers[idx] = pt + perp * (side * k);
+            tips[idx] = pt + perp * (side * halfWidth);
         }
 
-        Point3d virtualPrevCenter = (startPt - startTangent * a) + Perp(startTangent) * (-1.0 * d);
-
-        // boundaryPts[i] is the pinch point before loop i; boundaryPts[i+1]
-        // is the pinch point after it - both on the segment's centerline.
-        var boundaryPts = new List<Point3d> { (virtualPrevCenter + centers[0]) * 0.5 };
-        for (int i = 0; i < nGuess; i++)
-            boundaryPts.Add((centers[i] + centers[i + 1]) * 0.5);
-
-        for (int i = 0; i < nGuess; i++)
+        for (int idx = 1; idx < count - 1; idx++)
         {
-            double sI = i * a;
-            if (sI > length + a)
-            {
-                // Every later loop is only further along still - nothing
-                // left to build.
-                break;
-            }
+            Point3d pinchBefore = (centers[idx - 1] + centers[idx]) * 0.5;
+            Point3d pinchAfter = (centers[idx] + centers[idx + 1]) * 0.5;
 
-            Vector3d perp = perps[i];
-            double side = sides[i];
-            Point3d center = centers[i];
-            Point3d outerTip = center + perp * (side * r);
-            Point3d segStart = boundaryPts[i];
-            Point3d segEnd = boundaryPts[i + 1];
-
-            var arc = new Arc(segStart, outerTip, segEnd);
+            var arc = new Arc(pinchBefore, tips[idx], pinchAfter);
             if (!arc.IsValid)
                 continue;
-            Curve arcCrv = arc.ToNurbsCurve();
-            if (arcCrv == null)
-                continue;
 
-            // Only ever clip the loop(s) actually next to this segment's own
-            // start/end, decided by arc-length position (sI vs. 0/length) -
-            // never by the loop's spatial (Euclidean) position (see
-            // LineCrossings for why a single loop's own geometry already
-            // needs this exact-crossing treatment).
-            var pieces = new List<Curve> { arcCrv };
-            if (sI <= a)
-                pieces = pieces.SelectMany(piece => ClipToLine(piece, center, r, startCut)).ToList();
-            if (sI >= length - a)
-                pieces = pieces.SelectMany(piece => ClipToLine(piece, center, r, endCut)).ToList();
-
+            var pieces = new List<Arc> { arc };
+            pieces = ClipSegmentPattern(pieces, startCut, trimCrossing);
+            pieces = ClipSegmentPattern(pieces, endCut, trimCrossing);
             arcs.AddRange(pieces);
         }
 
@@ -435,68 +557,95 @@ static class SoftInsulation
 
 
     /// <summary>
-    /// Build the FULL insulation symbol for the whole path.
-    ///
-    /// A polyline is broken into its individual straight segments, and each
-    /// is built independently as its own clean, complete loop chain
-    /// (BuildSegmentLoops) - the path's true start/end use the usual
-    /// perpendicular cap, while every interior vertex uses a miter (angle-
-    /// bisector) cap shared by the two segments that meet there, so they
-    /// never overlap or leave a gap. A path with no real corners (or that
-    /// isn't a literal polyline) is just built as a single segment.
+    /// Split the path into its segments: the straight pieces of a polyline,
+    /// or the line/arc pieces of a polycurve (the Rhino equivalent of a
+    /// polyline with bulges). Any other curve is a single segment.
+    /// Zero-length pieces are dropped.
     /// </summary>
-    static List<Curve> BuildLoopChain(Curve path, double width)
+    static List<Curve> GetSegments(Curve path, double tol)
     {
-        var vertices = path.TryGetPolyline(out Polyline polyline)
-            ? polyline.ToList()
-            : new List<Point3d>();
-
-        if (vertices.Count < 3)
+        var segments = new List<Curve>();
+        if (path.TryGetPolyline(out Polyline polyline))
         {
-            StartFrame(path, out Point3d startPt, out Vector3d startTangent);
-            EndFrame(path, out Point3d endPt, out Vector3d endTangent);
-            return BuildSegmentLoops(
-                path, width,
-                new Cut(startPt, startTangent, true),
-                new Cut(endPt, endTangent, false));
+            for (int i = 0; i < polyline.SegmentCount; i++)
+            {
+                Line line = polyline.SegmentAt(i);
+                if (line.Length > tol)
+                    segments.Add(new LineCurve(line));
+            }
+            return segments;
         }
 
-        var arcs = new List<Curve>();
-        for (int i = 0; i < vertices.Count - 1; i++)
+        Curve[] pieces = path.DuplicateSegments();
+        if (pieces != null && pieces.Length > 0)
+            segments.AddRange(pieces.Where(c => c.GetLength() > tol));
+        else
+            segments.Add(path);
+        return segments;
+    }
+
+
+    /// <summary>
+    /// Build the full insulation symbol for a polyline.
+    /// </summary>
+    public static List<Arc> BuildPattern(Polyline polyline, double width, double spacing,
+                                         bool trimCrossing, bool continuousRhythm, List<Line> debugLines = null)
+    {
+        return BuildPattern(polyline.ToPolylineCurve(), width, spacing, trimCrossing, continuousRhythm, debugLines);
+    }
+
+
+    /// <summary>
+    /// Build the full insulation symbol for a path curve.
+    ///
+    /// Every segment is built independently (BuildSegmentLoops), bounded by
+    /// two cut lines: a perpendicular cap at an open path's first/last
+    /// vertex, and at every interior vertex (plus the seam of a closed path)
+    /// a miter line along the angle bisector, shared by the two segments
+    /// that meet there. A keeps everything on its side of that line, B on
+    /// the other side, so the two bands meet exactly - no overlap, no gap.
+    /// </summary>
+    public static List<Arc> BuildPattern(Curve path, double width, double spacing,
+                                         bool trimCrossing, bool continuousRhythm, List<Line> debugLines = null)
+    {
+        double halfWidth = 0.5 * width;
+        double tol = RhinoMath.SqrtEpsilon * Math.Max(1.0, width);
+
+        List<Curve> segments = GetSegments(path, tol);
+        int n = segments.Count;
+        if (n == 0)
+            return new List<Arc>();
+
+        bool closed = path.IsClosed;
+        var startCuts = new CutLine[n];
+        var endCuts = new CutLine[n];
+
+        // Corner (miter) cuts: between segment i-1 and i, and - for a
+        // closed path - also between the last segment and the first.
+        for (int i = 0; i < n; i++)
         {
-            var seg = new LineCurve(vertices[i], vertices[i + 1]);
-            StartFrame(seg, out Point3d segStartPt, out Vector3d segStartTangent);
-            EndFrame(seg, out Point3d segEndPt, out Vector3d segEndTangent);
+            if (i == 0 && !closed)
+                continue;
+            int prev = (i - 1 + n) % n;
+            CornerCuts(segments[i].PointAtStart, segments[prev].TangentAtEnd, segments[i].TangentAtStart,
+                       halfWidth, out endCuts[prev], out startCuts[i], debugLines);
+        }
 
-            Cut startCut;
-            if (i == 0)
-            {
-                startCut = new Cut(segStartPt, segStartTangent, true);
-            }
-            else
-            {
-                EndFrame(new LineCurve(vertices[i - 1], vertices[i]), out _, out Vector3d prevTangent);
-                if (CornerCut(vertices[i], prevTangent, segStartTangent, out Vector3d cutTangent, out bool incomingPositive))
-                    startCut = new Cut(vertices[i], cutTangent, !incomingPositive);
-                else
-                    startCut = new Cut(segStartPt, segStartTangent, true);
-            }
+        // Perpendicular caps at an open path's first and last vertex.
+        if (!closed)
+        {
+            startCuts[0] = EndCap(segments[0].PointAtStart, segments[0].TangentAtStart, true, halfWidth, debugLines);
+            endCuts[n - 1] = EndCap(segments[n - 1].PointAtEnd, segments[n - 1].TangentAtEnd, false, halfWidth, debugLines);
+        }
 
-            Cut endCut;
-            if (i == vertices.Count - 2)
-            {
-                endCut = new Cut(segEndPt, segEndTangent, false);
-            }
-            else
-            {
-                StartFrame(new LineCurve(vertices[i + 1], vertices[i + 2]), out _, out Vector3d nextTangent);
-                if (CornerCut(vertices[i + 1], segEndTangent, nextTangent, out Vector3d cutTangent, out bool incomingPositive))
-                    endCut = new Cut(vertices[i + 1], cutTangent, incomingPositive);
-                else
-                    endCut = new Cut(segEndPt, segEndTangent, false);
-            }
-
-            arcs.AddRange(BuildSegmentLoops(seg, width, startCut, endCut));
+        var arcs = new List<Arc>();
+        double cumulative = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            double phase = continuousRhythm ? cumulative : 0.0;
+            arcs.AddRange(BuildSegmentLoops(segments[i], width, spacing, phase,
+                                            startCuts[i], endCuts[i], trimCrossing));
+            cumulative += segments[i].GetLength();
         }
 
         return arcs;
@@ -507,7 +656,9 @@ static class SoftInsulation
     {
         LoadConfig();
 
-        ClearPreviousOutput(doc);
+        string debugLayerName = LayerName + "_debug";
+        ClearLayer(doc, LayerName);
+        ClearLayer(doc, debugLayerName);
 
         Curve path = GetPathCurve();
         if (path == null)
@@ -516,33 +667,66 @@ static class SoftInsulation
             return;
         }
 
-        double? width = GetWidth();
-        if (width == null)
+        if (!GetSettings(out double width, out double spacing, out bool trimCrossing,
+                         out bool continuousRhythm, out bool debugDraw))
         {
             RhinoApp.WriteLine("Cancelled.");
             return;
         }
 
-        List<Curve> arcs = BuildLoopChain(path, width.Value);
+        if (spacing <= 0.0)
+            spacing = width / (2.0 + Sqrt3);
+        if (spacing >= width)
+        {
+            RhinoApp.WriteLine("SoftInsulation: spacing ({0}) must be smaller than the width ({1}).", spacing, width);
+            return;
+        }
+
+        List<Line> debugLines = debugDraw ? new List<Line>() : null;
+        if (debugDraw)
+            RhinoApp.WriteLine("SoftInsulation debug: width={0}, spacing={1}, loop radius={2:0.####}",
+                               width, spacing, 0.5 * width - (width * width - spacing * spacing) / (4.0 * width));
+
+        List<Arc> arcs = BuildPattern(path, width, spacing, trimCrossing, continuousRhythm, debugLines);
         if (arcs.Count == 0)
         {
             RhinoApp.WriteLine("SoftInsulation: could not build the loop chain.");
             return;
         }
 
-        int layerIndex = EnsureLayer(doc);
-        var attrs = new ObjectAttributes { LayerIndex = layerIndex };
-
-        Curve[] joined = Curve.JoinCurves(arcs, 0.01);
-        IEnumerable<Curve> finalCurves = joined != null && joined.Length > 0 ? joined : arcs;
-
-        var objIds = finalCurves.Select(crv => doc.Objects.AddCurve(crv, attrs)).ToList();
-
-        if (objIds.Count > 1)
+        // Everything below is added as one undo step (the Rhino counterpart
+        // of a database transaction).
+        uint undoRecord = doc.BeginUndoRecord("Soft insulation");
+        try
         {
-            int groupIndex = doc.Groups.Add();
-            foreach (Guid objId in objIds)
-                doc.Groups.AddToGroup(groupIndex, objId);
+            int layerIndex = EnsureLayer(doc, LayerName, System.Drawing.Color.FromArgb(255, 120, 170, 255));
+            var attrs = new ObjectAttributes { LayerIndex = layerIndex };
+
+            List<Curve> arcCurves = arcs.Select(a => (Curve)new ArcCurve(a)).ToList();
+            Curve[] joined = Curve.JoinCurves(arcCurves, 0.01);
+            IEnumerable<Curve> finalCurves = joined != null && joined.Length > 0 ? joined : arcCurves;
+
+            var objIds = finalCurves.Select(crv => doc.Objects.AddCurve(crv, attrs)).ToList();
+
+            if (objIds.Count > 1)
+            {
+                int groupIndex = doc.Groups.Add();
+                foreach (Guid objId in objIds)
+                    doc.Groups.AddToGroup(groupIndex, objId);
+            }
+
+            if (debugLines != null && debugLines.Count > 0)
+            {
+                int debugLayer = EnsureLayer(doc, debugLayerName, System.Drawing.Color.FromArgb(255, 255, 80, 80));
+                var debugAttrs = new ObjectAttributes { LayerIndex = debugLayer };
+                foreach (Line line in debugLines)
+                    doc.Objects.AddLine(line, debugAttrs);
+            }
+        }
+        finally
+        {
+            if (undoRecord != 0)
+                doc.EndUndoRecord(undoRecord);
         }
 
         doc.Views.Redraw();

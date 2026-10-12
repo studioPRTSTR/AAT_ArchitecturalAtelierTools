@@ -1,6 +1,6 @@
-# <img src="icons/ArchitecturalAtelierTools.svg" width="40" align="center"> ArchitecturalAtelierTools
+<h1><img src="icons/ArchitecturalAtelierTools.svg" height="40" align="top"> ArchitecturalAtelierTools</h1>
 
-A Rhino 8 plugin with drawing tools for architectural details. Installs as one package; every tool is a Rhino command.
+Rhino 8 tools for drawing architectural detail symbols.
 
 | Icon | Command | What it does |
 |------|---------|--------------|
@@ -8,10 +8,7 @@ A Rhino 8 plugin with drawing tools for architectural details. Installs as one p
 
 ## Install
 
-1. Rhino → Options → **Package Manager → Sources** → add the shared package folder.
-2. `_PackageManager` → search `ArchitecturalAtelierTools` → **Install** → restart Rhino.
-
-Updates appear in the Package Manager.
+Download the `.yak` from [Releases](../../releases) and drag it into an open Rhino 8 window – or install `ArchitecturalAtelierTools` via `_PackageManager`. Restart Rhino.
 
 ## Repository layout
 
@@ -20,7 +17,7 @@ commands/   one .cs file per command (+ optional .json defaults)
 icons/      plugin icon + one icon per command (.svg and .png)
 docs/       drawings for this README
 build.ps1   builds the .yak package and publishes it to the feed
-ArchitecturalAtelierTools.rhproj   Rhino project: plugin name, version, icons, commands
+RSoTeSc.rhproj   Rhino project: plugin name, version, icons, commands
 ```
 
 ---

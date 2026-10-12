@@ -146,12 +146,15 @@ static class SoftInsulation
         int layerIndex = doc.Layers.FindByFullPath(layerName, -1);
         if (layerIndex >= 0)
             return layerIndex;
+        int sep = layerName.LastIndexOf("::", StringComparison.Ordinal);
         var layer = new Layer
         {
-            Name = layerName,
+            Name = sep < 0 ? layerName : layerName.Substring(sep + 2),
             Color = color,
             PlotWeight = 0.13,
         };
+        if (sep >= 0)
+            layer.ParentLayerId = doc.Layers[EnsureLayer(doc, layerName.Substring(0, sep), color)].Id;
         return doc.Layers.Add(layer);
     }
 

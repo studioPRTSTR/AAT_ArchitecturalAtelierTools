@@ -109,3 +109,5 @@ git tag v1.1.0
 ```
 
 Builds `build\<version>\*.yak` and copies it to the feed. Every release needs a higher version (`1.0.1` fix, `1.1.0` new command).
+
+Open for forking, maybe more people in architecture can contribute to some "necessary" commands for Rhino :)

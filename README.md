@@ -11,6 +11,13 @@ Rhino 8 tools for drawing architectural detail symbols.
 
 Download the `.yak` from [Releases](../../releases) and drag it into an open Rhino 8 window – or install `ArchitecturalAtelierTools` via `_PackageManager`. Restart Rhino.
 
+## Roadmap
+
+- **SoftInsulation, non-destructive** – edit existing insulation (width, spacing, corners) through a menu instead of redrawing it.
+- **Extended preferences** – more settings per tool in `AATPreferences`, not only the layer.
+- **Dynamic blocks** – a menu for placing and adjusting parametric detail blocks.
+- **Office standards** – template-like setup of layers, line types, hatches etc., so every drawing follows the office standard.
+
 ## Repository layout
 
 ```

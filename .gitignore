@@ -1,1 +1,4 @@
-build/
+# build output: keep only the .yak package
+build/**
+!build/**/
+!build/**/*.yak

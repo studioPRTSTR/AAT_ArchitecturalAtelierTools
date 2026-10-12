@@ -5,6 +5,7 @@ Rhino 8 tools for drawing architectural detail symbols.
 | Icon | Command | What it does |
 |------|---------|--------------|
 | <img src="icons/SoftInsulation.svg" width="32"> | `SoftInsulation` | Draws the soft / batt insulation symbol along a curve. |
+| <img src="icons/AATPreferences.svg" width="32"> | `AATPreferences` | Sets the layer each tool draws on. |
 
 ## Install
 
@@ -19,6 +20,12 @@ docs/       drawings for this README
 build.ps1   builds the .yak package and publishes it to the feed
 RSoTeSc.rhproj   Rhino project: plugin name, version, icons, commands
 ```
+
+---
+
+## AATPreferences
+
+Run `AATPreferences` (or click its toolbar button). For each tool, pick a layer from the drawing or type a name, then **Save**. The choice is stored in `%APPDATA%\ArchitecturalAtelierTools\` and used from the next run on. Sublayers work (`Parent::Child`); missing layers are created.
 
 ---
 
@@ -51,7 +58,7 @@ The result goes on layer `A_Isolation_01`, joined and grouped. Each run adds a n
 
 Corners sharper than 15° or straighter than 165° always use Miter. Supported paths: lines, polylines (open or closed), polycurves with arcs, single curves – in the XY plane.
 
-**Defaults** come from `SoftInsulation.json`. First file found wins:
+**Defaults** come from `SoftInsulation.json` (the layer can also be set with `AATPreferences`). First file found wins:
 
 1. `%APPDATA%\ArchitecturalAtelierTools\SoftInsulation.json`
 2. next to the installed plugin

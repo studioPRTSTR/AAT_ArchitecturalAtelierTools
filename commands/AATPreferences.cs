@@ -40,6 +40,7 @@ static class AATPreferences
     static readonly LayerSetting[] LayerSettings =
     {
         new LayerSetting("SoftInsulation", "SoftInsulation.json", "layer_name", "A_Isolation_01"),
+        new LayerSetting("AATDim", "AATDim.json", "layer_name", "A_Bemassung_01"),
     };
 
 

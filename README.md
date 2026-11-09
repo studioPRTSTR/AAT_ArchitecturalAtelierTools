@@ -5,6 +5,7 @@ Rhino 8 tools for drawing architectural detail symbols.
 | Icon | Command | What it does |
 |------|---------|--------------|
 | <img src="icons/SoftInsulation.svg" width="32"> | `SoftInsulation` | Draws the soft / batt insulation symbol along a curve. |
+| <img src="icons/AATDim.svg" width="32"> | `AATDim` | Multi-row dimension chains (like AEC dimensions) with an architectural style: `80` below 1 m, `1.20` from 1 m. |
 | <img src="icons/AATPreferences.svg" width="32"> | `AATPreferences` | Sets the layer each tool draws on. |
 
 ## Install
@@ -83,6 +84,77 @@ Corners sharper than 15° or straighter than 165° always use Miter. Supported p
 ```
 
 All keys optional. `corner_mode`: `miter`, `butt_incoming`, `butt_outgoing`.
+
+---
+
+## AATDim
+
+Dimension chains with several rows in one object – similar to AEC dimensions in AutoCAD.
+
+1. Run `AATDim`, set `Rows` (how many dimension lines).
+2. Pick all points, **Enter**.
+3. Click where the first dimension line goes. The other rows follow outwards, one row spacing apart.
+
+Every row gets all points, the last row is the overall dimension (first to last point). Then thin out the rows with the buttons (below). The chain goes on layer `A_Bemassung_01` and is grouped. Each row is a continuous chain.
+
+**Buttons on a selected chain**
+
+Select a chain – small buttons appear next to it:
+
+- **`<>`** on every measure point – click it, then click the new location (osnaps work, live preview, typed coordinates too). The point moves in every row; on top of a neighbour the two dimensions merge.
+- **`x`** on every point between two dimensions – click to remove the point from that row, the two dimensions become one.
+- **`-`** at the start of each row – deletes the row.
+- **`+`** below the outermost row – adds a row with all points.
+- **`+`** (orange) right next to every dimension text – type a text that goes below this dimension line, e.g. `RPH 2.10` under a door width. Once set, the button shows **`T`**; click it to edit, leave it empty to remove.
+- **`...`** next to the first row – opens the chain menu:
+  - *Distance between dimension lines* in mm on paper. The first row stays, the others are re-spaced; new rows use it too.
+  - *Text below the dimension line* for every dimension, e.g. `RPH 2.10` under a door width. The text is a normal text object in the chain's group, centred under its dimension, and follows it when points move. Clear the field to remove it.
+
+The chain stays selected, so you can click the next button right away. Buttons are hidden while a command runs.
+
+| Option       | Values                                    | Effect                                                                   |
+|--------------|-------------------------------------------|--------------------------------------------------------------------------|
+| `Rows`       | 1 – 9                                     | Number of dimension rows (default from `default_rows`).                  |
+| `Direction`  | `Auto`, `Horizontal`, `Vertical`, `Aligned` | Measuring direction. Auto = the longer side of the points (CPlane X or Y). Aligned = first → last point. |
+| `Edit`       | pick a chain                              | `AddPoints`, `RemovePoints`, `AddRow`, `AddOverall`, `DeleteRow`; `Row` picks the row to edit. |
+| `Update`     |                                           | Re-checks the format of every dimension with the style.                 |
+| `ResetStyle` |                                           | Rebuilds the style from `AATDim.json` and makes it current.             |
+
+**The style `AAT_Bemassung`**
+
+- Text 2 mm (paper), Arial, ticks, text above the line. Model space scale 50 (= 1:50).
+- Below 1 m in centimetres without decimals (`80`), from 1 m in metres with two decimals (`1.20`). Rhino can't switch units by value natively, so each dimension gets a small unit override. Everything else follows the style.
+- The style is made current, so normal `_Dim` dimensions get the same format too.
+
+**Editing like one object**
+
+After `AATDim` has run once in a session, it watches dimension edits (and shows the buttons):
+
+- Drag a measure point (grips, `Stretch`, `Move` of one dimension) – every row that shares the point follows. Dragging a point onto its neighbour merges the two dimensions.
+- Drag a dimension line – the whole row moves with it.
+- A dimension that crosses 1 m switches between `80` and `1.20`.
+- **Undo** reverts the follow-up changes first, the edit itself with the second undo.
+- `Copy` gives an independent chain. `Ungroup` detaches the dimensions from the chain.
+- Use the `x` button (or `Edit → RemovePoints`) instead of deleting single dimensions – a deleted dimension inside a row is filled in again at the next edit.
+
+To have the watcher on from the start, add `AATDim _Update` to *Options → General → Command lists → Run these commands every time Rhino starts*.
+
+**Defaults** come from `AATDim.json` (same lookup order as SoftInsulation; the layer can also be set with `AATPreferences`):
+
+```json
+{
+    "layer_name": "A_Bemassung_01",
+    "style_name": "AAT_Bemassung",
+    "text_height_mm": 2.0,
+    "model_space_scale": 50,
+    "meter_threshold": 1.0,
+    "cm_decimals": 0,
+    "m_decimals": 2,
+    "decimal_separator": "."
+}
+```
+
+Also available: `default_rows` (2), `last_row_overall` (true), `font`, `row_spacing_mm` (7), `tick_size_mm` (2), `text_gap_mm` (1), `extension_offset_mm` (1), `extension_overshoot_mm` (1.5), `dimline_overshoot_mm` (1.5). Style changes apply to new drawings, or after `ResetStyle`.
 
 ---
 

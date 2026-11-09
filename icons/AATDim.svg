@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+  <g fill="none" stroke="#8a8a8a" stroke-width="2" stroke-linecap="round">
+    <line x1="8" y1="54" x2="8" y2="12"/>
+    <line x1="24" y1="54" x2="24" y2="34"/>
+    <line x1="40" y1="54" x2="40" y2="34"/>
+    <line x1="56" y1="54" x2="56" y2="12"/>
+  </g>
+  <g fill="none" stroke="#2f6fdc" stroke-width="3" stroke-linecap="round">
+    <line x1="4" y1="38" x2="60" y2="38"/>
+    <line x1="4" y1="18" x2="60" y2="18"/>
+    <line x1="4.5" y1="42.5" x2="11.5" y2="33.5"/>
+    <line x1="20.5" y1="42.5" x2="27.5" y2="33.5"/>
+    <line x1="36.5" y1="42.5" x2="43.5" y2="33.5"/>
+    <line x1="52.5" y1="42.5" x2="59.5" y2="33.5"/>
+    <line x1="4.5" y1="22.5" x2="11.5" y2="13.5"/>
+    <line x1="52.5" y1="22.5" x2="59.5" y2="13.5"/>
+  </g>
+  <g fill="#2f6fdc">
+    <rect x="12" y="27" width="8" height="4" rx="1"/>
+    <rect x="28" y="27" width="8" height="4" rx="1"/>
+    <rect x="44" y="27" width="8" height="4" rx="1"/>
+    <rect x="26" y="7" width="12" height="4" rx="1"/>
+  </g>
+</svg>

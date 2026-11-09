@@ -91,6 +91,8 @@ All keys optional. `corner_mode`: `miter`, `butt_incoming`, `butt_outgoing`.
 
 Dimension chains with several rows in one object – similar to AEC dimensions in AutoCAD.
 
+![AATDim chain and its buttons](docs/aatdim-chain.svg)
+
 1. Run `AATDim`, set `Rows` (how many dimension lines).
 2. Pick all points, **Enter**.
 3. Click where the first dimension line goes. The other rows follow outwards, one row spacing apart.
